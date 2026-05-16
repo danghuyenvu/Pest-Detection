@@ -8,7 +8,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-def generate_gradcam(model, image_path: str, output_path: str) -> str:
+def generate_eigencam(model, image_path: str, output_path: str) -> str:
     img_bgr = cv2.imread(image_path)
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     img_normalize = np.float32(img_rgb) / 255.0
@@ -17,7 +17,7 @@ def generate_gradcam(model, image_path: str, output_path: str) -> str:
     img_tensor = torch.from_numpy(img_resized).permute(2, 0, 1).unsqueeze(0)
 
     pytorch_model = model.model
-    torch.nn.Module.train(pytorch_model, False)
+    pytorch_model.eval()
     target_layers = [pytorch_model.model[-2]]
 
     class YOLOWrapper(torch.nn.Module):

@@ -5,7 +5,7 @@ from db.database import SessionLocal
 from models.detection import Detection
 from services.model_service import predict_image, model
 from services.cloudinary_service import upload_image
-from services.grad_cam_service import generate_gradcam
+from services.eigen_cam_service import generate_eigencam
 from utils.logger import get_logger
 from dotenv import load_dotenv
 
@@ -20,7 +20,7 @@ celery_app = Celery(
 )
 
 @celery_app.task(name="predict_task")
-def predict_task(db_record_id: int, image_path: str):
+def predict_task(db_record_id: int, image_path: str, confidence_threshold: float = 0.25):
     logger.info(f"Task started - record_id={db_record_id}")
 
     db: Session = SessionLocal()
@@ -28,12 +28,12 @@ def predict_task(db_record_id: int, image_path: str):
     cam_output_path = None
 
     try:
-        prediction = predict_image(image_path)
+        prediction = predict_image(image_path, conf=confidence_threshold)
 
         output_img_path = prediction["output_img_path"]
         image_url = upload_image(output_img_path)
         cam_output_path = image_path.replace(".jpg", "_cam.jpg")
-        generate_gradcam(model, image_path, cam_output_path)
+        generate_eigencam(model, image_path, cam_output_path)
         cam_url = upload_image(cam_output_path)
 
         logger.info(f"Uploaded to Cloudinary: {image_url}")

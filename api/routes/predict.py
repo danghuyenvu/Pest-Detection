@@ -1,6 +1,6 @@
 import uuid
 import os
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 from worker import predict_task
 from models.detection import Detection
@@ -18,6 +18,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def predict(
     user_id: str, 
     file: UploadFile = File(...),
+    confidence_threshold: float = Form(default=0.25, ge=0.01, le=1.0),
     db: Session = Depends(get_db)
 ):
     
@@ -31,13 +32,14 @@ async def predict(
 
     new_record = Detection(
         status="PENDING", 
-        user_id=user_id
+        user_id=user_id,
+        confidence_threshold=confidence_threshold
     )
     db.add(new_record)
     db.commit()
     db.refresh(new_record) 
 
-    task = predict_task.delay(new_record.id, file_path)
+    task = predict_task.delay(new_record.id, file_path, confidence_threshold)
 
     new_record.task_id = task.id
     db.commit()

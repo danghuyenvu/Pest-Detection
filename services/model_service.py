@@ -16,8 +16,8 @@ PEST_MAPPING = {
     "bo to"  : "big_pest"
 }
 
-def predict_image(file_path: str) -> dict:
-    results = model.predict(source=file_path, conf=0.25)
+def predict_image(file_path: str, conf: float = 0.25) -> dict:
+    results = model.predict(source=file_path, conf=conf)
     result = results[0]
     
     input_path = Path(file_path)

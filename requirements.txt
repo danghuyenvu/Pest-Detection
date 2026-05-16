@@ -16,3 +16,4 @@ redis
 grad-cam
 opencv-python
 matplotlib
+prometheus-fastapi-instrumentator
