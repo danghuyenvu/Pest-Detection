@@ -3,8 +3,9 @@ from celery import Celery
 from sqlalchemy.orm import Session
 from db.database import SessionLocal
 from models.detection import Detection
-from services.model_service import predict_image
+from services.model_service import predict_image, model
 from services.cloudinary_service import upload_image
+from services.grad_cam_service import generate_gradcam
 from utils.logger import get_logger
 from dotenv import load_dotenv
 
@@ -24,12 +25,17 @@ def predict_task(db_record_id: int, image_path: str):
 
     db: Session = SessionLocal()
     output_img_path = None
+    cam_output_path = None
 
     try:
         prediction = predict_image(image_path)
-        output_img_path = prediction["output_img_path"]
 
+        output_img_path = prediction["output_img_path"]
         image_url = upload_image(output_img_path)
+        cam_output_path = image_path.replace(".jpg", "_cam.jpg")
+        generate_gradcam(model, image_path, cam_output_path)
+        cam_url = upload_image(cam_output_path)
+
         logger.info(f"Uploaded to Cloudinary: {image_url}")
 
         record = db.query(Detection).filter(Detection.id == db_record_id).first()
@@ -37,6 +43,7 @@ def predict_task(db_record_id: int, image_path: str):
         if record:
             record.status = "FINISHED"
             record.image_url = image_url
+            record.cam_url = cam_url
             record.total_count = prediction["total_count"]
             record.thin_pest_count  = prediction["counts"]["thin_pest"]
             record.round_pest_count = prediction["counts"]["round_pest"]
@@ -52,7 +59,7 @@ def predict_task(db_record_id: int, image_path: str):
             db.commit()
 
     finally:
-        for path in [image_path, output_img_path]:
+        for path in [image_path, output_img_path, cam_output_path]:
             if path and os.path.exists(path):
                 os.remove(path)
                 logger.debug(f"Removed temp file: {path}")

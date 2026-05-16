@@ -30,7 +30,7 @@ async def predict(
         buffer.write(content)
 
     new_record = Detection(
-        status="QUEUED", 
+        status="PENDING", 
         user_id=user_id
     )
     db.add(new_record)
@@ -42,7 +42,7 @@ async def predict(
     new_record.task_id = task.id
     db.commit()
 
-    return {"id": new_record.id, "status": "QUEUED"}
+    return {"id": new_record.id, "status": "PENDING"}
 
 @router.get("/{detection_id}")
 async def get_predict_result(
@@ -62,12 +62,13 @@ async def get_predict_result(
 
     if record.status == "FINISHED":
         response["result"] = {
-            "image_url": record.image_url,
+            "image_url"  : record.image_url,
+            "cam_url"    : record.cam_url,
             "total_count": record.total_count,
             "details": {
-                "thin_pest": record.thin_pest_count,
+                "thin_pest" : record.thin_pest_count,
                 "round_pest": record.round_pest_count,
-                "big_pest": record.big_pest_count
+                "big_pest"  : record.big_pest_count
             }
         }
     elif record.status == "FAILED":

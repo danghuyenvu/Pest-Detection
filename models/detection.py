@@ -10,6 +10,7 @@ class Detection(Base):
     task_id = Column(String, unique=True)
     status = Column(String, default="QUEUED")
     image_url = Column(String, nullable=True)
+    cam_url = Column(String, nullable=True)
     total_count = Column(Integer, default=0)
     thin_pest_count = Column(Integer, default=0)
     round_pest_count = Column(Integer, default=0)
