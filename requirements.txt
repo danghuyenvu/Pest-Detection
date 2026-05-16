@@ -3,12 +3,16 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 python-dotenv
---index-url https://download.pytorch.org/whl/cpu
+
 torch
 torchvision
---extra-index-url https://pypi.org/simple
+
 ultralytics
 cloudinary
 python-multipart
 celery
 redis
+
+grad-cam
+opencv-python
+matplotlib
