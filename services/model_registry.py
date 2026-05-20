@@ -1,4 +1,3 @@
-from functools import lru_cache
 from typing import Optional, Type
 from ultralytics import YOLO
 from sqlalchemy.orm import Session

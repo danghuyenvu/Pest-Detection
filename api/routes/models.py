@@ -8,7 +8,10 @@ from schemas.model_version import ModelVersionCreate, ModelVersionResponse
 router = APIRouter(prefix="/models", tags=["Model"])
 
 @router.post("/", response_model=ModelVersionResponse)
-def register_version(payload: ModelVersionCreate, db: Session = Depends(get_db)):
+def register_version(
+    payload: ModelVersionCreate, 
+    db: Session = Depends(get_db)
+):
     version = ModelVersion(**payload.model_dump())
 
     db.add(version)
@@ -22,7 +25,10 @@ def list_versions(db: Session = Depends(get_db)):
     return db.query(ModelVersion).order_by(ModelVersion.created_at.desc()).all()
 
 @router.patch("/{version_id}/activate")
-def activate_version(version_id: int, db: Session = Depends(get_db)):
+def activate_version(
+    version_id: int,
+    db: Session = Depends(get_db)
+):
     db.query(ModelVersion).update({"is_active": False})
     version = db.query(ModelVersion).filter(ModelVersion.id == version_id).first()
 
