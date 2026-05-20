@@ -1,5 +1,3 @@
-# services/model_service.py
-
 from ultralytics import YOLO
 from pathlib import Path
 from utils.logger import get_logger
@@ -14,7 +12,7 @@ PEST_MAPPING = {
 
 def predict_image(file_path: str, conf: float = 0.25, model=None) -> dict:
     if model is None:
-        model = YOLO("models/version/best.pt")
+        raise ValueError("Model must be provided.")
     results = model.predict(source=file_path, conf=conf)
     result = results[0]
     

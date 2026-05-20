@@ -8,6 +8,17 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+class YOLOWrapper(torch.nn.Module):
+        def __init__(self, model: Any) -> None:
+            super().__init__()
+            self.model = model
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            output = self.model(x)
+            if isinstance(output, (tuple, list)):
+                return output[0]
+            return output
+
 def generate_eigencam(model, image_path: str, output_path: str) -> str:
     img_bgr = cv2.imread(image_path)
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -19,17 +30,6 @@ def generate_eigencam(model, image_path: str, output_path: str) -> str:
     pytorch_model = model.model
     pytorch_model.eval()
     target_layers = [pytorch_model.model[-2]]
-
-    class YOLOWrapper(torch.nn.Module):
-        def __init__(self, model: Any) -> None:
-            super().__init__()
-            self.model = model
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            output = self.model(x)
-            if isinstance(output, (tuple, list)):
-                return output[0]
-            return output
         
     wrapped = YOLOWrapper(pytorch_model)
     with torch.no_grad():
