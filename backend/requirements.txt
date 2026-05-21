@@ -18,3 +18,4 @@ opencv-python
 matplotlib
 httpx
 prometheus-fastapi-instrumentator
+prometheus-client
