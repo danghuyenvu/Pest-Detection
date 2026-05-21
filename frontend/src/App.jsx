@@ -9,7 +9,7 @@ import DashboardStats from "./components/DashboardStats";
 import UploadPanel from "./components/UploadPanel";
 import ResultPanel from "./components/ResultPanel";
 import ModelRegistry from "./components/ModelRegistry";
-import HistoryTable, {formatDate} from "./components/HistoryTable";
+import HistoryTable from "./components/HistoryTable";
 
 const DEFAULT_USER_ID = "demo-user";
 
@@ -335,7 +335,7 @@ export default function App() {
                 batchSummary={batchSummary}
                 isBatchSubmitting={isBatchSubmitting}
               />
-              <HistoryTable history={history} formatDate={formatDate} />
+              <HistoryTable history={history} />
             </section>
           </>
         )}
