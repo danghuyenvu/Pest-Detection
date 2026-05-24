@@ -19,14 +19,29 @@ const ROUTES = {
   login: "/login",
   register: "/register",
   forgotPassword: "/forgot-password",
-  app: "/console",
+  console: "/console",
+  models: "/models",
 };
 
 function routeFromPath(pathname) {
-  if (pathname === ROUTES.register) return "register";
-  if (pathname === ROUTES.forgotPassword) return "forgotPassword";
-  if (pathname === ROUTES.app) return getToken() ? "app" : "login";
-  return getToken() ? "app" : "login";
+  const token = getToken();
+  const storedRole = localStorage.getItem("pest-user-role");
+  
+  if (pathname === ROUTES.register) {
+    if (token) {
+      return storedRole === "admin" ? "models" : "console";
+    }
+    return "register";
+  }
+  if (pathname === ROUTES.forgotPassword) {
+    if (token) {
+      return storedRole === "admin" ? "models" : "console";
+    }
+    return "forgotPassword";
+  }
+  if (pathname === ROUTES.models) return token ? "models" : "login";
+  if (pathname === ROUTES.console) return token ? "console" : "login";
+  return token ? (storedRole === "admin" ? "models" : "console") : "login";
 }
 
 // ── Auth gate ─────────────────────────────────────────────────────────────────
@@ -35,7 +50,8 @@ function useAuthRoute() {
   const [route, setRouteState] = React.useState(() => routeFromPath(window.location.pathname));
 
   const setRoute = React.useCallback((nextRoute, options = {}) => {
-    const safeRoute = nextRoute === "app" && !getToken() ? "login" : nextRoute;
+    const unsafeRoutes = ["console", "models"];
+    const safeRoute = unsafeRoutes.includes(nextRoute) && !getToken() ? "login" : nextRoute;
     const nextPath = ROUTES[safeRoute] || ROUTES.login;
 
     setRouteState(safeRoute);
@@ -62,8 +78,8 @@ function useAuthRoute() {
   return { route, setRoute };
 }
 
-export function MainApp({ onLogout }) {
-  const [activePage, setActivePage] = React.useState("prediction");
+export function MainApp({ onLogout, route, setRoute }) {
+  const activePage = route === "models" ? "register" : "prediction";
   const [userId, setUserId] = React.useState(() => localStorage.getItem("pest-user-id") || DEFAULT_USER_ID);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [file, setFile] = React.useState(null);
@@ -107,6 +123,7 @@ export function MainApp({ onLogout }) {
         if (cancelled) return;
         setCurrentUser(user);
         setUserId(user.id || DEFAULT_USER_ID);
+        localStorage.setItem("pest-user-role", user.role || "user");
       } catch (err) {
         if (!cancelled) {
           setError(err.message);
@@ -122,39 +139,34 @@ export function MainApp({ onLogout }) {
   }, [onLogout]);
 
   React.useEffect(() => {
+    if (!currentUser) return;
+    if (currentUser.role === "admin" && route !== "models") {
+      setRoute("models", { replace: true });
+    }
+    if (currentUser.role !== "admin" && route !== "console") {
+      setRoute("console", { replace: true });
+    }
+  }, [currentUser, route, setRoute]);
+
+  React.useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
-  const refreshDashboard = React.useCallback(async () => {
+  // ── Console Route: Fetch prediction dashboard data ────────────────────────
+  const refreshConsoleDashboard = React.useCallback(async () => {
     setIsRefreshing(true);
     setError("");
     try {
-      const promises = [apiRequest("/stats/"), apiRequest("/history/?limit=12")];
+      const results = await Promise.allSettled([
+        apiRequest("/stats/"),
+        apiRequest("/history/?limit=12"),
+      ]);
 
-      // only fetch models when the user is on the registration page
-      const shouldFetchModels = activePage === "register";
-      if (shouldFetchModels) promises.push(apiRequest("/models/"));
-
-      const results = await Promise.allSettled(promises);
-
-      // stats
       if (results[0].status === "fulfilled") setStats(results[0].value);
-      else setStats(null);
-
-      // history
       if (results[1].status === "fulfilled") setHistory(results[1].value);
-      else setHistory([]);
 
-      // models (only present when requested)
-      if (shouldFetchModels) {
-        const modelsResult = results[2];
-        if (modelsResult?.status === "fulfilled") setModels(modelsResult.value);
-        else setModels([]);
-      }
-
-      // surface first error but don't block successful results
       const firstRejected = results.find((r) => r.status === "rejected");
       if (firstRejected) setError(firstRejected.reason?.message || String(firstRejected.reason));
     } catch (err) {
@@ -162,11 +174,50 @@ export function MainApp({ onLogout }) {
     } finally {
       setIsRefreshing(false);
     }
-  }, [activePage]);
+  }, []);
+
+  // ── Models Route: Fetch model registry data ─────────────────────────────
+  const refreshModelsDashboard = React.useCallback(async () => {
+    setIsRefreshing(true);
+    setError("");
+    try {
+      const result = await apiRequest("/models/");
+      setModels(result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // ── Route handler: Navigate and fetch data for console ───────────────────
+  const navigateToConsole = React.useCallback(() => {
+    setRoute("console");
+    refreshConsoleDashboard();
+  }, [setRoute, refreshConsoleDashboard]);
+
+  // ── Route handler: Navigate and fetch data for models ────────────────────
+  const navigateToModels = React.useCallback(() => {
+    setRoute("models");
+    refreshModelsDashboard();
+  }, [setRoute, refreshModelsDashboard]);
+
+  // ── Unified refresh for current page (used by polling and UI) ────────────
+  const refreshCurrentPage = React.useCallback(() => {
+    if (route === "console") {
+      refreshConsoleDashboard();
+    } else if (route === "models") {
+      refreshModelsDashboard();
+    }
+  }, [route, refreshConsoleDashboard, refreshModelsDashboard]);
 
   React.useEffect(() => {
-    refreshDashboard();
-  }, [refreshDashboard]);
+    if (route === "console") {
+      refreshConsoleDashboard();
+    } else if (route === "models") {
+      refreshModelsDashboard();
+    }
+  }, [route, refreshConsoleDashboard, refreshModelsDashboard]);
 
   React.useEffect(() => {
     if (!currentJob?.id) return undefined;
@@ -179,7 +230,7 @@ export function MainApp({ onLogout }) {
         setPrediction(result);
         if (["FINISHED", "FAILED"].includes(result.status)) {
           setCurrentJob(null);
-          refreshDashboard();
+          refreshCurrentPage();
         }
       } catch (err) {
         if (!cancelled) {
@@ -195,7 +246,7 @@ export function MainApp({ onLogout }) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [currentJob, refreshDashboard]);
+  }, [currentJob, refreshCurrentPage]);
 
   React.useEffect(() => {
     if (!batchJob?.batch_id) return undefined;
@@ -232,7 +283,7 @@ export function MainApp({ onLogout }) {
 
           if (!cancelled) {
             setBatchJob(null);
-            refreshDashboard();
+            refreshCurrentPage();
           }
         }
       } catch (err) {
@@ -249,7 +300,7 @@ export function MainApp({ onLogout }) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [batchJob, refreshDashboard]);
+  }, [batchJob, refreshCurrentPage]);
 
   const handleFileChange = (event) => {
     const nextFile = event.target.files?.[0];
@@ -349,7 +400,7 @@ export function MainApp({ onLogout }) {
         body: JSON.stringify(payload),
       });
       setModelForm({ name: "", file_path: "", description: "", mAP50: "", mAP50_95: "" });
-      refreshDashboard();
+      refreshModelsDashboard();
     } catch (err) {
       setError(err.message);
     }
@@ -359,7 +410,7 @@ export function MainApp({ onLogout }) {
     setError("");
     try {
       await apiRequest(`/models/${modelId}/activate`, { method: "PATCH" });
-      refreshDashboard();
+      refreshModelsDashboard();
     } catch (err) {
       setError(err.message);
     }
@@ -405,14 +456,19 @@ export function MainApp({ onLogout }) {
 
   return (
     <div className="app-layout">
-      <AppNavigation activePage={activePage} setActivePage={setActivePage} onLogout={onLogout} currentUser={currentUser} />
+      <AppNavigation
+        activePage={activePage}
+        onNavigate={(page) => setRoute(page === "register" ? "models" : "console")}
+        onLogout={onLogout}
+        currentUser={currentUser}
+      />
       <main className="app-shell">
         <section className="topbar">
           <div>
             <p className="eyebrow">{pageEyebrow}</p>
             <h1>{pageTitle}</h1>
           </div>
-          <button className="icon-button" type="button" onClick={refreshDashboard} aria-label="Refresh dashboard">
+          <button className="icon-button" type="button" onClick={refreshCurrentPage} aria-label="Refresh dashboard">
             <RefreshCw size={18} className={isRefreshing ? "spin" : ""} />
           </button>
         </section>
@@ -493,7 +549,7 @@ export function MainApp({ onLogout }) {
 export default function App() {
   const { route, setRoute } = useAuthRoute();
 
-  const handleLoginSuccess = () => setRoute("app", { replace: true });
+  const handleLoginSuccess = () => setRoute("console", { replace: true });
 
   // After OTP verified → go to login so the user signs in properly
   const handleVerified = () => {
@@ -502,6 +558,7 @@ export default function App() {
 
   const handleLogout = () => {
     clearToken();
+    localStorage.removeItem("pest-user-role");
     setRoute("login", { replace: true });
   };
 
@@ -538,5 +595,9 @@ export default function App() {
     );
   }
 
-  return <MainApp onLogout={handleLogout} />;
+  if (route === "console" || route === "models") {
+    return <MainApp onLogout={handleLogout} route={route} setRoute={setRoute} />;
+  }
+
+  return null;
 }
